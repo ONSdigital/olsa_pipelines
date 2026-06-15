@@ -1,0 +1,14 @@
+variables = ['age', 'sex', 'ethnicity', 'cob', 'disability', 'qualification', 'employment', 'skill', 'subregional_partnerships', 'occupation'] # ['age', 'sex', 'ethnicity', 'cob', 'disability', 'qualification', 'employment', 'skill', 'subregional_partnerships', 'occupation']
+geography_file = 'areas.xlsx'
+sector_file = 'construction_only.xlsx'
+outside_uk_code = 22
+produce_headline_totals = true
+date_range = [2024, 2025]
+sampling_files = [2024, 2025] # Currently only supports 2024 and 2025
+filter_by = ['ILODEFR']
+run_analysis = true  # false if only want paths
+shade_unreliable_data = true
+replace_disclosive_data = true
+set_negative_values_to_zero = false
+delete_raw_data = true
+debug_mode = false # Should be false unless you need to change elements of the code
