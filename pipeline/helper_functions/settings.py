@@ -9,7 +9,7 @@ from dotenv import dotenv_values
 def load_config():
     env_config = env_load(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
-    with open('pipeline/config.toml', 'r') as f:
+    with open(os.path.join(os.path.dirname(__file__), '..', 'config.toml'), 'r') as f:
         config = toml.load(f)
 
         if config['produce_headline_totals']:
