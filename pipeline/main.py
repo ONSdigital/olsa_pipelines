@@ -1,4 +1,5 @@
 import warnings
+import os
 import pandas as pd
 
 from typing import List
@@ -14,6 +15,8 @@ from helper_functions.settings import CONFIG
 
 def main() -> None:
     """Runs the full data processing helper_functions and writes results to Excel."""
+
+    os.chdir(os.path.join(os.path.dirname(__file__), '..'))
 
     if CONFIG['debug_mode']:
         warnings.warn("\n\n DEBUG mode is on. \n Final outputs should not be generated with this mode enabled. "
