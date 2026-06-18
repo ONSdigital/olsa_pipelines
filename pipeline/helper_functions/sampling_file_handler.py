@@ -25,18 +25,18 @@ def combine_sampling_file_and_data(data, year):
 
     sampling_file, _ = read_data(sampling_file_path)
 
-    sampling_file = sampling_file[['CASENO', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'dwt_adjusted']]
+    sampling_file = sampling_file[['CASENO', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'dweight_adj']]
 
     # Merge sampling file and data file
     data_with_sampling = data.merge(sampling_file, on="CASENO", how="left")
 
     # Ensure weight variables are numeric
     data_with_sampling['PWTA22'] = pd.to_numeric(data_with_sampling['PWTA22'], errors='coerce')
-    data_with_sampling['dwt_adjusted'] = pd.to_numeric(data_with_sampling['dwt_adjusted'], errors='coerce')
+    data_with_sampling['dweight_adj'] = pd.to_numeric(data_with_sampling['dweight_adj'], errors='coerce')
 
     # Keep only rows where weights are positive
     data_with_sampling = data_with_sampling[
-        (data_with_sampling['dwt_adjusted'] > 0) & (data_with_sampling['PWTA22'] > 0)
+        (data_with_sampling['dweight_adj'] > 0) & (data_with_sampling['PWTA22'] > 0)
         ]
 
     # Extract household ID from case number (remove last two characters)
@@ -172,7 +172,7 @@ def calibrate_survey(weight_column):
         cal_survey <- ext.calibrated(
             data = full_data,
             ids = ~hhid,
-            weights = ~dwt_adjusted,
+            weights = ~dweight_adj,
             calmodel = ~p1 + p2 + p3 + p4 + p5 + p6 + p7 -1,
             weights.cal = ~{weight_column}
         )
