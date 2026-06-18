@@ -16,8 +16,6 @@ from helper_functions.settings import CONFIG
 def main() -> None:
     """Runs the full data processing helper_functions and writes results to Excel."""
 
-    os.chdir(os.path.join(os.path.dirname(__file__), '..'))
-
     if CONFIG['debug_mode']:
         warnings.warn("\n\n DEBUG mode is on. \n Final outputs should not be generated with this mode enabled. "
                       "\n This mode enables a simplified Regenesees helper_functions to speed up program runtime.\n")
