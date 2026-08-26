@@ -29,7 +29,7 @@ Contents of folders will be detailed by the README.md files within that director
 Navigate to the folder where you wish to clone this git repository and run:
 
 ```
-git clone https://github.com/ONSdigital/onslocal_internal.git
+git clone https://github.com/ONSdigital/olsa_pipelines.git
 ```
 
 IDEs such as Pycharm can make virtual environment set up easier, however, to manually set up a virtual environment, 
