@@ -1,4 +1,4 @@
-# onslocal_internal
+# OLSA Pipelines
 
 ## Contact
 This repository was developed and is maintained by OLSA.
