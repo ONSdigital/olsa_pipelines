@@ -118,18 +118,6 @@ def read_sav_file(data_path):
     return data
 
 
-def return_sic_column(code_length):
-    match code_length:
-        case 2:
-            return 'INDD07'
-        case 3:
-            return 'INDG07'
-        case 4:
-            return 'INDC07'
-        case _:
-            raise Exception("Unknown code length supplied.")
-
-
 def reorder_columns(merged_df: pd.DataFrame, first_columns: list) -> pd.DataFrame:
     # Combine with remaining columns
     new_column_order = first_columns + [col for col in merged_df.columns if col not in first_columns]

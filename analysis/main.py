@@ -4,13 +4,14 @@ import pandas as pd
 
 from typing import List
 
-from helper_functions.data_pipeline import Data
 from helper_functions.excel_writer import create_sheets, write_to_xlsx
 from helper_functions.sampling_file_handler import load_r_packages_if_needed
 
 from helper_functions.suppression import run_suppression_pipeline
 from helper_functions.utils import clean_industry_df, extract_numeric_codes, find_datasets, return_area_codes
 from helper_functions.settings import CONFIG
+
+from pipelines.sectors import SectorPipeline
 
 
 def main() -> None:
@@ -32,9 +33,9 @@ def main() -> None:
 
     yearly_dataframes: List[dict[str, pd.DataFrame]] = []
     for year, path in datasets.items():
-        dataset = Data(year, path,
-                       area_codes,
-                       industry_codes)
+        dataset = SectorPipeline(year, path,
+                                 area_codes,
+                                 industry_codes)
         yearly_dataframes.append(dataset.run_data_pipeline())
 
     sheets = create_sheets(yearly_dataframes)
