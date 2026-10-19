@@ -1,5 +1,5 @@
 age_data = {
-    'info': {'old_column': 'AAGE', 'new_column': 'Age brackets'},
+    'info': {'old_column': 'AAGE', 'new_column': 'Age_brackets'},
     'codes': {
         1: "Under 16",
         2: "16-29",

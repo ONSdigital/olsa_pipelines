@@ -1,7 +1,7 @@
 from openpyxl import load_workbook
 from openpyxl.styles import PatternFill
 
-from .settings import CONFIG
+from analysis.helper_functions.settings import CONFIG
 
 DISCLOSIVE_THRESHOLD = 5
 UNRELIABLE_THRESHOLD = 10

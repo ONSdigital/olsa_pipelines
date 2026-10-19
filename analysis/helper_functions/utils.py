@@ -8,33 +8,8 @@ import pyreadstat
 
 import pandas as pd
 
-from pipeline import demographic_mappings
-from .settings import CONFIG
-
-
-def clean_industry_df(df):
-    df = df.dropna(subset=['Code: Definitions'])  # Remove NaNs
-    df = df[~df['Code: Definitions'].str.contains('source', case=False, na=False)]  # Remove rows containing 'source'
-    df.loc[:, 'Industry'] = df.loc[:, 'Industry'].ffill()
-
-    if df['Removed'].notna().any():
-        removed_rows = df[df['Removed'].notna()]
-
-        print("\nRemoved rows:")
-        for row in removed_rows.iterrows():
-            print(f"{row[1]}\n")
-
-    df = df[df['Removed'].isna()]
-
-    industry_dict = {}
-
-    # Make a dict combining each industry with each row, and search for subsectors
-    for industry, industry_rows in df.groupby('Industry'):
-        industry_dict[industry] = {}
-        for code, row in industry_rows.groupby('Code: Definitions'):
-            industry_dict[industry][code] = row['Subsectors'].to_list()
-
-    return industry_dict
+from analysis import demographic_mappings
+from analysis.helper_functions.settings import CONFIG
 
 
 def format_subsector(subsector: str, industry: str) -> str:

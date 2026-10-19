@@ -1,15 +1,16 @@
 import re
 from functools import reduce
-from typing import List, Union
+from typing import List, Union, Tuple
 
 import pandas as pd
+from pandas import DataFrame
 
 from . import sampling_file_handler
-from .settings import CONFIG
+from analysis.helper_functions.settings import CONFIG
 from .utils import read_data, get_variable_data, find_max_string, remap_tuple_ranges
 
 
-def remap_nans(data_df: pd.DataFrame, column_name: str, codes: dict) -> dict:
+def _remap_nans(data_df: pd.DataFrame, column_name: str, codes: dict) -> dict:
     """
     Remap nans to -1000 to allow fillna to work correctly.
 
@@ -55,13 +56,21 @@ def format_column_headers(data_df: pd.DataFrame) -> None:
 
     :return:
     """
+
     data_df.columns = data_df.columns.str.upper()
 
 
-def subset_rows(data_df: pd.DataFrame) -> None:
-    if 'ILODEFR' in CONFIG['filter_by']:
+def subset_rows(data_df: pd.DataFrame) -> pd.DataFrame:
+    if CONFIG['analysis_type'] == 'business_ownership':
+        data_df = data_df[(data_df['ILODEFR'] == 1) & (data_df['business_owner'])]
+
+    elif CONFIG['analysis_type'] == 'sectors':
         # Filter rows where ILODEFR is 1 (in employment)
         data_df = data_df[data_df['ILODEFR'] == 1]
+
+    # TODO add filter_by option
+
+    return data_df
 
 
 def find_matching_column(data_df: pd.DataFrame, candidates):
@@ -75,9 +84,9 @@ def find_matching_column(data_df: pd.DataFrame, candidates):
         return find_max_string([col for col in candidates if col in data_df.columns])
 
 
-def _get_fillna_value(variable_dict, column_name, codes):
+def _get_fillna_value(data_df, variable_dict, column_name, codes):
     if 'fillna' in variable_dict['info']:
-        codes = remap_nans(column_name, codes)
+        codes = _remap_nans(data_df, column_name, codes)
         fillna_value = variable_dict['info']['fillna']
     else:
         fillna_value = 'Missing'
@@ -85,9 +94,19 @@ def _get_fillna_value(variable_dict, column_name, codes):
     return fillna_value, codes
 
 
-def apply_mapped_column(data_df: pd.DataFrame, column_name, new_column_name, variable_dict) -> None:
-    codes = get_variable_codes(variable_dict, column_name)
-    fillna_value, codes = _get_fillna_value(variable_dict, column_name, codes)
+def _apply_mapped_column(data_df: pd.DataFrame, column_name, new_column_name, variable_dict) -> None:
+    """
+    Create a categorised column by mapping APS codes to labels.
+
+    :param data_df:
+    :param column_name:
+    :param new_column_name:
+    :param variable_dict:
+    :return:
+    """
+
+    codes = _get_variable_codes(variable_dict, column_name)
+    fillna_value, codes = _get_fillna_value(data_df, variable_dict, column_name, codes)
 
     if all(isinstance(key, tuple) for key in codes):
         codes = remap_tuple_ranges(codes)
@@ -103,10 +122,16 @@ def apply_mapped_column(data_df: pd.DataFrame, column_name, new_column_name, var
                                     .fillna(fillna_value).astype('category'))
 
 
-def classify_demographic_info(variables_missing, year) -> None:
+def classify_demographic_info(data_df, year) -> List[str]:
     """
     Assign labels to demographic columns based on demographic_mappings.py file.
+    :param data_df:
+    :param year:
+    :return: List of missing demographic variables.
     """
+
+    variables_missing = []
+
     for variable in CONFIG['variables']:
         if variable == 'headline_totals':
             continue
@@ -125,8 +150,8 @@ def classify_demographic_info(variables_missing, year) -> None:
                       f"({variable_dict['info']['main_column']}, {variable_dict['info']['secondary_column']})")
                 continue
 
-            apply_mapped_column(data_df, main_column, f"{new_column}_main", variable_dict)
-            apply_mapped_column(data_df, secondary_column, f"{new_column}_secondary", variable_dict)
+            _apply_mapped_column(data_df, main_column, f"{new_column}_main", variable_dict)
+            _apply_mapped_column(data_df, secondary_column, f"{new_column}_secondary", variable_dict)
 
         # For variables where it is a single column for both main and secondary job
         else:
@@ -138,10 +163,12 @@ def classify_demographic_info(variables_missing, year) -> None:
                       f"({variable_dict['info']['old_column']})")
                 continue
 
-            apply_mapped_column(data_df, old_column, new_column, variable_dict)
+            _apply_mapped_column(data_df, old_column, new_column, variable_dict)
+
+    return variables_missing
 
 
-def filter_by_geography(data_df: pd.DataFrame, column: str, geography: str, area_codes) -> pd.DataFrame:
+def _filter_by_geography(data_df: pd.DataFrame, column: str, geography: str, area_codes) -> pd.DataFrame:
     if geography == 'Rest of UK':
         specified_codes = [code for codes_list in area_codes.values() for code in codes_list]
 
@@ -155,32 +182,39 @@ def filter_by_geography(data_df: pd.DataFrame, column: str, geography: str, area
         return data_df[data_df[column].isin(area_codes[geography])]
 
 
-def aggregate_job_data(data: dict, industry_col: str, variable: str, agg_func: str, year, pwta_column) -> pd.DataFrame:
-    rename_dict = {industry_col: 'industry'}
+def get_counts(agg_func, data, variable, groupby_col=None):
+    groupby_list = []
 
-    if int(year) in CONFIG['sampling_files'] and agg_func == 'sum':
-        return sampling_file_handler.get_counts_and_ci(data, industry_col, variable, pwta_column).rename(
-            columns=rename_dict)
-    else:
-        return get_counts(agg_func, data, industry_col, rename_dict, variable)
+    if groupby_col is not None:
+        groupby_list.append(groupby_col)
 
-
-def get_counts(agg_func, data, industry_col, rename_dict, variable):
-    groupby_list = [industry_col]
     if variable != 'headline_totals':
         groupby_list.append(variable)
 
-    results = (data['df'].groupby(groupby_list, observed=True)
-               .agg({data['agg_column']: agg_func})
-               .reset_index()
-               .rename(columns=rename_dict))
+    if groupby_list:
+        results = (
+            data['df']
+            .groupby(groupby_list, observed=True)
+            .agg({data['agg_column']: agg_func})
+            .reset_index()
+        )
+    else:
+        # Handles cases where no grouping is necessary, such as headline totals for Business Ownership
+        results = (
+            data['df']
+            .agg({data['agg_column']: agg_func})
+            .to_frame()
+            .T
+        )
 
-    results = concat_totals_to_df(results, variable, data['agg_column'])
+    if groupby_col is not None:
+        results = results.rename(columns={groupby_col: 'industry'})
+        results = concat_totals_to_df(results, variable, data['agg_column'])
 
     return results
 
 
-def get_variable_codes(variable_dict: dict, column_name: str) -> dict:
+def _get_variable_codes(variable_dict: dict, column_name: str) -> dict:
     """
     Extracts the matching code from variable_dict based on the column_name. Handles cases where codes change between
     years.
@@ -209,8 +243,8 @@ def get_variable_codes(variable_dict: dict, column_name: str) -> dict:
             raise Exception(f"Multiple codes: {matching_codes} found matching {column_name}.")
 
 
-def count_jobs(geography: str, variable: Union[dict, str], industry: str,
-                use_weights: bool, pwta_column) -> pd.DataFrame:
+def _count_jobs(data_df, geography: str, variable: Union[dict, str],
+                use_weights: bool, pwta_column, area_codes, year, groupby_col=None) -> pd.DataFrame:
     def _get_agg_column(default_column: str, use_weights: bool) -> str:
         return pwta_column if use_weights else default_column
 
@@ -225,35 +259,32 @@ def count_jobs(geography: str, variable: Union[dict, str], industry: str,
 
     # Filter the DataFrame based on geography
     geography_filtered_df = {
-        'df': filter_by_geography('GORWKR', geography),
+        'df': _filter_by_geography(data_df, 'GORWKR', geography, area_codes),
         'agg_column': _get_agg_column('GORWKR', use_weights)
     }
 
-    results = aggregate_job_data(geography_filtered_df, industry, new_column, agg_func)
+    if int(year) in CONFIG['sampling_files'] and agg_func == 'sum':
+        results = sampling_file_handler.get_counts_and_ci(geography_filtered_df, new_column, pwta_column, groupby_col)
+    else:
+        results = get_counts(agg_func, geography_filtered_df, new_column, groupby_col)
+
     results['Geography'] = geography
 
     return results
 
 
-def check_code_lengths(industry: str, industry_codes) -> int:
-    length_of_code = len(str(list(industry_codes[industry])[0]))
+def add_row_ids(data_df: pd.DataFrame) -> None:
+    """
+    Adds a Row ID to each row, and a column of 'Total' if headline totals are to be calculated.
 
-    if not all(len(str(x)) == length_of_code for x in industry_codes[industry]):
-        raise Exception(f"Codes in {industry} are not all of the same length.")
-
-    return length_of_code
-
-
-def add_necessary_columns(data_df: pd.DataFrame):
+    :param data_df:
+    :return:
+    """
     data_df.reset_index(drop=True, inplace=True)
     data_df['ROW_ID'] = data_df.index
 
     if 'headline_totals' in CONFIG['variables']:
         data_df['constant'] = 'Total'
-
-
-def remove_df_column_whitespace(data_df: pd.DataFrame):
-    data_df.columns = data_df.columns.str.replace(' ', '_', regex=False)
 
 
 def handle_sampling_file(data_df: pd.DataFrame, year, pwta_column):
@@ -262,7 +293,7 @@ def handle_sampling_file(data_df: pd.DataFrame, year, pwta_column):
         sampling_file_handler.r_setup(full_data_df, pwta_column)
 
 
-def trim_columns(data_df: pd.DataFrame, pwta_column) -> None:
+def trim_columns(data_df: pd.DataFrame, pwta_column) -> pd.DataFrame:
     def get_col_locs(columns: List[str]):
         col_locs = []
         for column in columns:
@@ -291,6 +322,8 @@ def trim_columns(data_df: pd.DataFrame, pwta_column) -> None:
     data_df = data_df.iloc[:, [caseno_col_loc, pwta_col_loc]
                               + variable_range + region_col_locs + filter_col_locs + industry_col_locs]
 
+    return data_df
+
 
 def concat_totals_to_df(data_df: pd.DataFrame, variable, agg_column):
     if variable == 'headline_totals':
@@ -305,64 +338,61 @@ def concat_totals_to_df(data_df: pd.DataFrame, variable, agg_column):
     return data_df
 
 
-def clean_dataframe(data_df: pd.DataFrame, industry, variable, industry_codes, year, pwta_column):
-    groupby = ["Geography", "industry"]
+def clean_dataframe(data_df: pd.DataFrame, variable, year, pwta_column) -> pd.DataFrame:
+    groupby = ["Geography"]
 
-    if not variable == 'Headline totals':
+    if variable != 'Headline totals':
         groupby.append(variable)
 
-    # Remove missing rows
-    data_df = data_df[data_df["industry"] != "Missing/Unknown"].copy()
-
-    industry_codes = {k.replace(' ', '_'): v for k, v in industry_codes.items()}
-
-    # Define a custom order for the 'industry' column
-    industry_order = [*sorted(list(set(industry_codes[industry].values()))),
-                      "All other industries",
-                      "All industries total"]
-
-    # Convert 'industry' column to a categorical type with the custom order
-    data_df["industry"] = pd.Categorical(data_df["industry"], categories=industry_order, ordered=True)
-
-    # Reorder columns
     data_df = data_df.sort_values(by=groupby)
 
-    # Rename columns
     data_df.columns = data_df.columns.str.replace('_', ' ')
 
-    data_df = data_df.rename(columns={pwta_column: f'{year}',
-                            'GORWKR': f'Raw_{year}'})
-
-    try:
-        data_df = data_df.rename(columns={'Confidence Interval lower': f'{year} Confidence Interval lower',
-                                'Confidence Interval upper': f'{year} Confidence Interval upper'})
-    except TypeError:
-        pass
+    data_df = data_df.rename(
+        columns={
+            pwta_column: f'{year}',
+            'GORWKR': f'Raw_{year}',
+            'Confidence Interval lower': f'{year} Confidence Interval lower',
+            'Confidence Interval upper': f'{year} Confidence Interval upper'
+        }
+    )
 
     return data_df
 
 
-def process_variable_for_industry(industry: str, variable: str, area_codes, variables_missing, final_data) -> None:
-    groupby = ['industry', 'Geography']
-
+def return_variable_info(variable, variables_missing):
     if not variable == 'headline_totals':
         variable_codes = get_variable_data(variable)
-        new_column = variable_codes['info']['new_column'].replace(' ', '_')
-        groupby.insert(1, new_column)
+        variable_name = variable_codes['info']['new_column'].replace(' ', '_')
 
         if variable_codes['info']['new_column'] in variables_missing:
-            return
+            return None
     else:
         variable_codes = variable
-        new_column = 'Headline totals'
+        variable_name = 'Headline totals'
+
+    return variable_name, variable_codes
+
+
+def analyse_variable(data_df, variable_info: Tuple, area_codes, pwta_column,
+                     year, groupby_col=None) -> DataFrame | None:
+    groupby = []
+
+    if groupby_col:
+        groupby.append('industry')
+
+    if variable_info[0] != 'Headline totals':
+        groupby.append(variable_info[0])
+
+    groupby.append('Geography')
 
     results = []
     for use_weights in [False, True]:
         temp_results = []
 
         for geography in [*area_codes.keys(), 'Rest of UK']:
-            temp_results.append(_count_jobs(geography, variable_codes,
-                                            industry, use_weights))
+            temp_results.append(_count_jobs(data_df, geography, variable_info[1],
+                                            use_weights, pwta_column, area_codes, year, groupby_col))
 
         # Merge the two geographies
         results.append(pd.concat(temp_results))
@@ -370,9 +400,45 @@ def process_variable_for_industry(industry: str, variable: str, area_codes, vari
     # Merge all results together
     merged_df = reduce(lambda left, right: pd.merge(left, right, on=groupby), results)
 
-    final_df = clean_dataframe(merged_df, industry, new_column)
+    final_df = clean_dataframe(merged_df, variable_info[0], year, pwta_column)
 
-    if industry not in final_data:
-        final_data[industry] = {}
+    return final_df
 
-    final_data[industry][new_column.replace('_', ' ')] = final_df
+
+def combine_main_and_secondary_variables(data_df) -> pd.DataFrame:
+    def _extract_and_rename_columns(df: pd.DataFrame, strings: dict) -> pd.DataFrame:
+        search_string = strings['search_string']
+        replacement_string = strings['replacement_string']
+
+        return df[[col for col in columns_to_merge if col.endswith(search_string)]].rename(
+            columns=lambda x: x.replace(search_string, replacement_string)
+        )
+
+    column_type_rules = [{'search_string': '_main', 'replacement_string': ''},
+                         {'search_string': '_secondary', 'replacement_string': ''}]
+
+    region_type_rules = [{'search_string': 'GORWKR', 'replacement_string': 'GORWKR', 'joint_col': '_main'},
+                         {'search_string': 'GORWK2R', 'replacement_string': 'GORWKR', 'joint_col': '_secondary'}]
+
+    columns_to_match = [entry['search_string'] for entry in column_type_rules + region_type_rules]
+
+    # Find all columns with repeats defined in column_type_rules
+    columns_to_merge = [col for col in data_df.columns if any(key in col for key in columns_to_match)]
+
+    # Return data that is not repeated
+    base_df = data_df.drop(columns=columns_to_merge)
+
+    region_merged_dfs = []
+    for rename_rule in region_type_rules:
+        matching_column_type_rule = next((entry for entry in column_type_rules
+                                          if entry['search_string'] == rename_rule['joint_col']),
+                                         None)
+
+        region_df = _extract_and_rename_columns(data_df, rename_rule)
+        rest_of_df = _extract_and_rename_columns(data_df, matching_column_type_rule)
+
+        region_merged_dfs.append(pd.concat([base_df, region_df, rest_of_df], axis=1))
+
+    data_df = pd.concat(region_merged_dfs, axis=0).reset_index(drop=True)
+
+    return data_df

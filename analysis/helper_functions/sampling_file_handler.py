@@ -1,20 +1,26 @@
-from .settings import CONFIG
+from analysis.helper_functions.settings import CONFIG
 from .utils import read_data
 import os
 import pandas as pd
 
+# Note: rpy2 functions are lazily loaded to prevent repeated bridging to r when pyreadstat multiprocessing
+# imports libraries
+
+os.environ["RPY2_CFFI_MODE"] = "ABI"
 os.environ["R_HOME"] = CONFIG['r_home_directory']
-os.environ['R_SHELL'] = 'cmd'
 
-import contextlib
 
-with open(os.devnull, 'w') as devnull:
-    with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
-        from rpy2.robjects import r
-        from rpy2.robjects import pandas2ri, globalenv, default_converter, conversion
+def load_r_packages_if_needed(datasets):
+    # Check if sampling files and years match
+    if not set(CONFIG["sampling_files"]) & {int(k) for k in datasets}:
+        return
 
-# Suppress R console output
-r('sink("nul")')
+    print("\nLoading R packages")
+
+    from rpy2.robjects import r
+
+    for package in ["ReGenesees", "haven", "dplyr", "stringr"]:
+        r(f"library({package})")
 
 
 def combine_sampling_file_and_data(data, year):
@@ -48,13 +54,6 @@ def combine_sampling_file_and_data(data, year):
     return data_with_sampling
 
 
-def load_r_packages_if_needed(datasets):
-    common_elements = set(CONFIG['sampling_files']) & set([int(k) for k in datasets.keys()])
-
-    if common_elements:
-        load_r_packages()
-
-
 def r_setup(full_data, weight_column) -> None:
     print(f'\nConverting pandas dataframe to r dataframe')
     convert_python_to_r(full_data, 'full_data')
@@ -63,27 +62,22 @@ def r_setup(full_data, weight_column) -> None:
     calibrate_survey(weight_column)
 
 
-def load_r_packages() -> None:
-    print(f'\nLoading r packages')
-    packages = ['ReGenesees', 'haven', 'dplyr', 'stringr']
-
-    for pkg in packages:
-        r(f'library({pkg})')
-
-
-def get_counts_and_ci(subsetted_data, industry_col, variable, pwta_column):
+def get_counts_and_ci(subsetted_data, variable, pwta_column, groupby_col=None):
     subset_data(subsetted_data['df'])
-    run_svystat(industry_col, variable)
+    run_svystat(variable, groupby_col)
     results = clean_results(pwta_column, variable)
-    results = calculate_totals(industry_col, pwta_column, results, variable)
+
+    if groupby_col is not None:
+        results = calculate_totals(pwta_column, results, variable, groupby_col)
+        results = results.rename(columns={groupby_col: 'industry'})
 
     return results
 
 
-def calculate_totals(industry_col, pwta_column, other_results, variable):
+def calculate_totals(pwta_column, other_results, variable, groupby_col):
     run_svystat(variable=variable, all_industries=True)
     totals_results = clean_results(pwta_column, variable)
-    totals_results[industry_col] = 'All industries total'
+    totals_results[groupby_col] = 'All industries total'
 
     totals_results = totals_results[other_results.columns]
 
@@ -91,6 +85,8 @@ def calculate_totals(industry_col, pwta_column, other_results, variable):
 
 
 def clean_results(pwta_column, variable):
+    from rpy2.robjects import r, pandas2ri
+
     rename_dict = {'Total.ones': pwta_column,
                    'CI.l(95%).Total.ones': 'Confidence Interval lower',
                    'CI.u(95%).Total.ones': 'Confidence Interval upper'}
@@ -114,28 +110,55 @@ def clean_results(pwta_column, variable):
     return results
 
 
-def run_svystat(industry_col=None, variable=None, all_industries=False):
-    if all_industries and variable == 'headline_totals':
-        groupby_string = 'constant'
-    elif all_industries and variable != 'headline_totals':
-        groupby_string = variable
-    elif variable == 'headline_totals':
-        groupby_string = industry_col
-    else:
-        groupby_string = f'{industry_col} + {variable}'
+# def run_svystat(variable=None, groupby_col=None, all_industries=False):
+#     from rpy2.robjects import r
+#
+#     if all_industries and variable == 'headline_totals':
+#         groupby_string = 'constant'
+#     elif all_industries and variable != 'headline_totals':
+#         groupby_string = variable
+#     elif variable == 'headline_totals':
+#         groupby_string = groupby_col
+#     else:
+#         groupby_string = f'{groupby_col} + {variable}'
+#
+#     # Run survey design and analysis
+#     r(f'''
+#     results <- svystatTM(
+#         design = cal_survey_subset,
+#         y = ~ones,
+#         by = ~{groupby_string},
+#         vartype = c("se"),
+#         conf.int = TRUE)
+#     ''')
 
-    # Run survey design and analysis
-    r(f'''
+def run_svystat(variable=None, groupby_col=None, all_industries=False):
+    from rpy2.robjects import r
+
+    groupby = []
+
+    if not all_industries:
+        groupby.append(groupby_col)
+
+    if variable != "headline_totals":
+        groupby.append(variable)
+
+    groupby_string = " + ".join(groupby) if groupby else "constant"
+
+    r(f"""
     results <- svystatTM(
-        design = cal_survey_subset, 
-        y = ~ones, 
+        design = cal_survey_subset,
+        y = ~ones,
         by = ~{groupby_string},
         vartype = c("se"),
-        conf.int = TRUE)
-    ''')
+        conf.int = TRUE
+    )
+    """)
 
 
 def subset_data(subsetted_data):
+    from rpy2.robjects import r
+
     convert_python_to_r(subsetted_data, 'subsetted_data')
 
     # Subset calibrated survey df
@@ -143,6 +166,13 @@ def subset_data(subsetted_data):
 
 
 def convert_python_to_r(py_df, r_name):
+    from rpy2.robjects import (
+        pandas2ri,
+        globalenv,
+        default_converter,
+        conversion,
+    )
+
     with (default_converter + pandas2ri.converter).context():
         r_df = conversion.get_conversion().py2rpy(py_df)
 
@@ -158,7 +188,9 @@ def calibrate_survey(weight_column):
 
     :return:
     """
+    from rpy2.robjects import r
 
+    # Speeds up running regenesees if debug mode is true
     if not CONFIG['debug_mode']:
         # Convert calibration groups into type factor
         r('''

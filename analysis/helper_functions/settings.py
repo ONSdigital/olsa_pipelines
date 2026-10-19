@@ -1,5 +1,3 @@
-import ast
-import os
 import toml
 import shutil
 from pathlib import Path
@@ -25,7 +23,6 @@ def load_config():
 
     # Always use local config
     with open(local_config, 'r') as f:
-        print("\nLoading config.local.toml")
         config = toml.load(f)
 
     if config['produce_headline_totals']:

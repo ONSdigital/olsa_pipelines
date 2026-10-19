@@ -1,17 +1,37 @@
 import warnings
 import os
+from pathlib import Path
+
 import pandas as pd
 
 from typing import List
 
-from helper_functions.excel_writer import create_sheets, write_to_xlsx
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+os.chdir(PROJECT_ROOT)
+
+from helper_functions.excel_writer import save_data
 from helper_functions.sampling_file_handler import load_r_packages_if_needed
 
 from helper_functions.suppression import run_suppression_pipeline
-from helper_functions.utils import clean_industry_df, extract_numeric_codes, find_datasets, return_area_codes
-from helper_functions.settings import CONFIG
+from helper_functions.utils import find_datasets
+from analysis.helper_functions.settings import CONFIG
 
+from pipelines.business_ownership import BusinessOwnershipPipeline
 from pipelines.sectors import SectorPipeline
+
+PIPELINES = {
+    "business_ownership": BusinessOwnershipPipeline,
+    "sectors": SectorPipeline,
+}
+
+
+def setup_pipeline():
+    pipeline = CONFIG["analysis_type"]
+    pipeline_class = PIPELINES[pipeline]
+
+    pipeline_class.setup()
+
+    return pipeline, pipeline_class
 
 
 def main() -> None:
@@ -21,10 +41,8 @@ def main() -> None:
         warnings.warn("\n\n DEBUG mode is on. \n Final outputs should not be generated with this mode enabled. "
                       "\n This mode enables a simplified Regenesees helper_functions to speed up program runtime.\n")
 
-    sector_code_df = pd.read_excel(f"pipeline/data/{CONFIG['sector_file']}")
-    industry_codes = extract_numeric_codes(clean_industry_df(sector_code_df))
     datasets = find_datasets()
-    area_codes = return_area_codes(f"pipeline/data/{CONFIG['geography_file']}")
+    pipeline, pipeline_class = setup_pipeline()
 
     if not CONFIG['run_analysis']:
         exit()
@@ -33,13 +51,10 @@ def main() -> None:
 
     yearly_dataframes: List[dict[str, pd.DataFrame]] = []
     for year, path in datasets.items():
-        dataset = SectorPipeline(year, path,
-                                 area_codes,
-                                 industry_codes)
+        dataset = pipeline_class(year, path)
         yearly_dataframes.append(dataset.run_data_pipeline())
 
-    sheets = create_sheets(yearly_dataframes)
-    paths = write_to_xlsx(sheets, datasets)
+    paths = save_data(yearly_dataframes, pipeline, datasets)
     run_suppression_pipeline(paths)
     print('Done!')
 
