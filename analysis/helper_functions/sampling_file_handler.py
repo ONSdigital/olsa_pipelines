@@ -75,7 +75,7 @@ def get_counts_and_ci(subsetted_data, variable, pwta_column, groupby_col=None):
 
 
 def calculate_totals(pwta_column, other_results, variable, groupby_col):
-    run_svystat(variable=variable, all_industries=True)
+    run_svystat(variable=variable, groupby_col=groupby_col, all_industries=True)
     totals_results = clean_results(pwta_column, variable)
     totals_results[groupby_col] = 'All industries total'
 
@@ -137,7 +137,7 @@ def run_svystat(variable=None, groupby_col=None, all_industries=False):
 
     groupby = []
 
-    if not all_industries:
+    if not all_industries and groupby_col:
         groupby.append(groupby_col)
 
     if variable != "headline_totals":
