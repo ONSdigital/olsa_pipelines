@@ -255,9 +255,8 @@ def _count_jobs(data_df, geography: str, variable: Union[dict, str],
     else:
         new_column = variable
 
-    new_column = new_column.replace(" ", "_")
-
     geographies = CONFIG['geography_lookup_cols']
+
     # Filter the DataFrame based on geography
     geography_filtered_df = {
         'df': _filter_by_geography(data_df, geographies['1st_job'], geography, area_codes),
