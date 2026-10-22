@@ -47,13 +47,15 @@ class SectorPipeline:
         self.pwta_column = find_pwta_col(self.data_df)
         self.final_data: dict[str, dict[str: pd.DataFrame]] = {}
         self.variables_missing: List[str] = []
-
+        self.geographies = create_geog_lookup()
         print(f'Rows loaded: {self.data_df.shape[0]}')
 
     def run_data_pipeline(self) -> dict[str, pd.DataFrame]:
         format_column_headers(self.data_df)
         self.variables_missing = classify_demographic_info(self.data_df, self.year)
+        self.data_df =  add_geography_columns(self.data_df , self.geographies)
         self.data_df = trim_columns(self.data_df, self.pwta_column)
+
 
         self._concat_industry_labels()
         self.data_df = combine_main_and_secondary_variables(self.data_df)

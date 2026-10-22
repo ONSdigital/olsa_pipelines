@@ -13,5 +13,8 @@ shade_unreliable_data = true
 replace_disclosive_data = true
 set_negative_values_to_zero = false
 delete_raw_data = true
-debug_mode = false # Should be false unless you need to change elements of the code
+debug_mode = true # Should be false unless you need to change elements of the code
 analysis_type = 'sectors' # business_ownership or sectors
+oa_file = 'Output_Area_(2021)_to_Ward_(2026)_to_LAD_(May_2026)_Best_Fit_Lookup_in_EW.csv'
+ca_file = 'Local_Authority_District_to_Combined_Authority_(May_2025)_Lookup_in_EN.csv'
+geography_lookup_cols = { "1st_job" = "CAUTH25CD", "2nd_job" = "CAUTH25CD" }

@@ -257,10 +257,11 @@ def _count_jobs(data_df, geography: str, variable: Union[dict, str],
 
     new_column = new_column.replace(" ", "_")
 
+    geographies = CONFIG['geography_lookup_cols']
     # Filter the DataFrame based on geography
     geography_filtered_df = {
-        'df': _filter_by_geography(data_df, 'GORWKR', geography, area_codes),
-        'agg_column': _get_agg_column('GORWKR', use_weights)
+        'df': _filter_by_geography(data_df, geographies['1st_job'], geography, area_codes),
+        'agg_column': _get_agg_column(geographies['1st_job'], use_weights)
     }
 
     if int(year) in CONFIG['sampling_files'] and agg_func == 'sum':
@@ -347,11 +348,11 @@ def clean_dataframe(data_df: pd.DataFrame, variable, year, pwta_column) -> pd.Da
     data_df = data_df.sort_values(by=groupby)
 
     data_df.columns = data_df.columns.str.replace('_', ' ')
-
+    geographies = CONFIG['geography_lookup_cols']
     data_df = data_df.rename(
         columns={
             pwta_column: f'{year}',
-            'GORWKR': f'Raw_{year}',
+            geographies['1st_job']: f'Raw_{year}',
             'Confidence Interval lower': f'{year} Confidence Interval lower',
             'Confidence Interval upper': f'{year} Confidence Interval upper'
         }
@@ -414,11 +415,13 @@ def combine_main_and_secondary_variables(data_df) -> pd.DataFrame:
             columns=lambda x: x.replace(search_string, replacement_string)
         )
 
+    geographies = CONFIG['geography_lookup_cols']
+
     column_type_rules = [{'search_string': '_main', 'replacement_string': ''},
                          {'search_string': '_secondary', 'replacement_string': ''}]
 
-    region_type_rules = [{'search_string': 'GORWKR', 'replacement_string': 'GORWKR', 'joint_col': '_main'},
-                         {'search_string': 'GORWK2R', 'replacement_string': 'GORWKR', 'joint_col': '_secondary'}]
+    region_type_rules = [{'search_string': geographies['1st_job'], 'replacement_string': geographies['1st_job'], 'joint_col': '_main'},
+                         {'search_string': geographies['2nd_job'], 'replacement_string': geographies['1st_job'], 'joint_col': '_secondary'}]
 
     columns_to_match = [entry['search_string'] for entry in column_type_rules + region_type_rules]
 
@@ -442,3 +445,26 @@ def combine_main_and_secondary_variables(data_df) -> pd.DataFrame:
     data_df = pd.concat(region_merged_dfs, axis=0).reset_index(drop=True)
 
     return data_df
+
+def create_geog_lookup() -> pd.DataFrame:
+    oa_lookup_df = pd.read_csv(f"analysis/data/{CONFIG['oa_file']}")
+    ca_lookup_df = pd.read_csv(f"analysis/data/{CONFIG['ca_file']}")
+
+    geog_lookup = oa_lookup_df.merge(ca_lookup_df,
+                                     left_on = "LAD26CD",
+                                     right_on = "LAD25CD",
+                                     how = "left")
+    return geog_lookup
+
+
+def add_geography_columns(data_df, geog_lookup) -> pd.DataFrame:
+    geographies = CONFIG['geography_lookup_cols']
+    if geographies['1st_job'] == geographies['2nd_job']:
+        geog_lookup_filtered = geog_lookup[["OA21CD", geographies['1st_job']]]
+    else: geog_lookup_filtered = geog_lookup[["OA21CD", geographies['1st_job'], geographies['2nd_job']]]
+
+    data_geog_df = data_df.merge(geog_lookup_filtered,
+                                 left_on = "OA21",
+                                 right_on = "OA21CD",
+                                 how = "left")
+    return data_geog_df
