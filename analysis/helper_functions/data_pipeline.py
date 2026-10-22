@@ -255,8 +255,6 @@ def _count_jobs(data_df, geography: str, variable: Union[dict, str],
     else:
         new_column = variable
 
-    new_column = new_column.replace(" ", "_")
-
     # Filter the DataFrame based on geography
     geography_filtered_df = {
         'df': _filter_by_geography(data_df, 'GORWKR', geography, area_codes),
@@ -363,7 +361,7 @@ def clean_dataframe(data_df: pd.DataFrame, variable, year, pwta_column) -> pd.Da
 def return_variable_info(variable, variables_missing):
     if not variable == 'headline_totals':
         variable_codes = get_variable_data(variable)
-        variable_name = variable_codes['info']['new_column'].replace(' ', '_')
+        variable_name = variable_codes['info']['new_column']
 
         if variable_codes['info']['new_column'] in variables_missing:
             return None

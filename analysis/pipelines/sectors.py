@@ -68,7 +68,7 @@ class SectorPipeline:
         for industry in self.industry_codes:
             code_length = self._check_code_lengths(industry)
             sic_column = self.return_sic_column(code_length)
-            self.assign_industry_labels(sic_column, industry)
+            self._assign_industry_labels(sic_column, industry)
 
     def _check_code_lengths(self, industry: str) -> int:
         length_of_code = len(str(list(self.industry_codes[industry])[0]))
@@ -78,7 +78,7 @@ class SectorPipeline:
 
         return length_of_code
 
-    def assign_industry_labels(self, sic_column, industry) -> None:
+    def _assign_industry_labels(self, sic_column, industry) -> None:
         """Assign industry labels using the designated sic column."""
 
         industry_data = self.industry_codes[industry]
@@ -102,7 +102,6 @@ class SectorPipeline:
         for industry in self.industry_codes:
             print(f"\nCollating {industry} data")
 
-            industry = industry.replace(" ", "_")
             self.final_data[industry] = {}
 
             for variable in CONFIG['variables']:
@@ -123,7 +122,7 @@ class SectorPipeline:
     def _set_industry_col_order(self, df, industry):
         df = df[df["industry"] != "Missing/Unknown"].copy()
 
-        industry_codes = {k.replace(' ', '_'): v for k, v in self.industry_codes.items()}
+        industry_codes = {k: v for k, v in self.industry_codes.items()}
 
         industry_order = [
             *sorted(set(industry_codes[industry].values())),
