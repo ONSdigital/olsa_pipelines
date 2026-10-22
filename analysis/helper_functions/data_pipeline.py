@@ -364,7 +364,7 @@ def clean_dataframe(data_df: pd.DataFrame, variable, year, pwta_column) -> pd.Da
 def return_variable_info(variable, variables_missing):
     if not variable == 'headline_totals':
         variable_codes = get_variable_data(variable)
-        variable_name = variable_codes['info']['new_column'].replace(' ', '_')
+        variable_name = variable_codes['info']['new_column']
 
         if variable_codes['info']['new_column'] in variables_missing:
             return None
