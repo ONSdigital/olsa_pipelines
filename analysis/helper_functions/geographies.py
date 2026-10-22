@@ -4,7 +4,6 @@ import requests
 SEARCH_URL = "https://www.arcgis.com/sharing/rest/search"
 
 SEARCH_PARAMS = {
-    "q": 'tags:"LAD" AND tags:"Output Area"',
     "sortField": "modified",
     "sortOrder": "desc",
     "num": 1000,
@@ -28,18 +27,28 @@ def get_open_geo_data(url: str, query_params: dict):
             f"HTTP Code: {response.status_code}, Status: {response.reason}")
 
 
-def get_most_recent_data(json):
+def get_most_recent_data(json, first_var, second_var):
     for item in json["results"]:
         title = item["title"]
 
-        if "Output Area" in title and "LAD" in title:
+        if first_var in title and second_var in title:
             print(f"Loading {title}")
             return item
 
 
-def main():
+def get_dataset(first_var, second_var):
+    SEARCH_PARAMS['q'] = f'tags:"{first_var}" AND tags:"{second_var}"'
+
     content = get_open_geo_data(SEARCH_URL, SEARCH_PARAMS)
-    content = get_most_recent_data(content)
+    content = get_most_recent_data(content, first_var, second_var)
+
+    return content
+
+
+def main():
+    content = get_dataset("Output Area", "LAD")
+    content = get_dataset("Local Authority", "CAUTH")
+    content = get_dataset("Output Area", "LSOA")
 
     list_of_dicts = []
     more_pages = True
