@@ -110,8 +110,8 @@ def write_to_xlsx(sheets: dict[str, dict[str, DataFrame]], datasets: dict[Path])
     paths = []
 
     print("\nSaving files:")
-    for industry, variables in sheets.items():
-        path = os.path.join("analysis/output", f"{industry} {year_range}.xlsx")
+    for group_variable, variables in sheets.items():
+        path = os.path.join("analysis/output", f"{CONFIG['geography_type']} {group_variable} {year_range}.xlsx")
 
         with pd.ExcelWriter(path, engine='openpyxl') as writer:
             for variable, df in variables.items():

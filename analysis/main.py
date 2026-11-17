@@ -1,5 +1,5 @@
-import warnings
 import os
+import warnings
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +25,19 @@ PIPELINES = {
 }
 
 
+def print_warnings():
+    if CONFIG['debug_mode']:
+        warnings.warn("\n\n DEBUG mode is on. \n Final outputs should not be generated with this mode enabled. "
+                      "\n This mode enables a simplified Regenesees helper_functions to speed up program runtime.\n")
+
+    if CONFIG['analysis_type'] == 'business_ownership':
+        warnings.warn("\n\nBusiness Ownership warning:"
+                      "\nThe current APS-based approximation of the ‘count of business ownership instances’ captures "
+                      "\nself-reported instances among the economically active population only."
+                      "\nEconomically inactive business owners are currently out of scope, as the workplace geography "
+                      "\ninformation required for the approximation is not collected for this group.\n")
+
+
 def setup_pipeline():
     pipeline = CONFIG["analysis_type"]
     pipeline_class = PIPELINES[pipeline]
@@ -36,10 +49,6 @@ def setup_pipeline():
 
 def main() -> None:
     """Runs the full data processing helper_functions and writes results to Excel."""
-
-    if CONFIG['debug_mode']:
-        warnings.warn("\n\n DEBUG mode is on. \n Final outputs should not be generated with this mode enabled. "
-                      "\n This mode enables a simplified Regenesees helper_functions to speed up program runtime.\n")
 
     datasets = find_datasets()
     pipeline, pipeline_class = setup_pipeline()

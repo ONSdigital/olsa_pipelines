@@ -1,3 +1,4 @@
+from analysis.helper_functions.geographies import create_geog_lookup, add_geography_columns
 from analysis.helper_functions.settings import CONFIG
 from analysis.helper_functions.data_pipeline import *
 from analysis.helper_functions.utils import extract_numeric_codes, return_area_codes
@@ -6,6 +7,7 @@ from analysis.helper_functions.utils import extract_numeric_codes, return_area_c
 class SectorPipeline:
     industry_codes = None
     area_codes = None
+    geog_lookup = None
 
     @classmethod
     def setup(cls):
@@ -13,6 +15,7 @@ class SectorPipeline:
         cls.industry_codes = extract_numeric_codes(cls.clean_industry_df(sector_code_df))
 
         cls.area_codes = return_area_codes(f"analysis/data/{CONFIG['geography_file']}")
+        cls.geog_lookup = create_geog_lookup()
 
     @classmethod
     def clean_industry_df(cls, df):
@@ -47,15 +50,14 @@ class SectorPipeline:
         self.pwta_column = find_pwta_col(self.data_df)
         self.final_data: dict[str, dict[str: pd.DataFrame]] = {}
         self.variables_missing: List[str] = []
-        self.geographies = create_geog_lookup()
+
         print(f'Rows loaded: {self.data_df.shape[0]}')
 
     def run_data_pipeline(self) -> dict[str, pd.DataFrame]:
+        self.data_df = add_geography_columns(self.data_df, self.geog_lookup)
         format_column_headers(self.data_df)
         self.variables_missing = classify_demographic_info(self.data_df, self.year)
-        self.data_df =  add_geography_columns(self.data_df , self.geographies)
         self.data_df = trim_columns(self.data_df, self.pwta_column)
-
 
         self._concat_industry_labels()
         self.data_df = combine_main_and_secondary_variables(self.data_df)
