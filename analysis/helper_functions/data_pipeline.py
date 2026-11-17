@@ -1,6 +1,6 @@
 import re
 from functools import reduce
-from typing import List, Union, Tuple
+from typing import List, Union, Tuple, Any
 
 import pandas as pd
 from pandas import DataFrame
@@ -244,7 +244,7 @@ def _get_variable_codes(variable_dict: dict, column_name: str) -> dict:
 
 
 def _count_jobs(data_df, geography: str, variable: Union[dict, str],
-                use_weights: bool, pwta_column, area_codes, year, groupby_col=None) -> pd.DataFrame:
+                use_weights: bool, pwta_column, area_codes, year, groupby_col=None) -> DataFrame | None:
     def _get_agg_column(default_column: str, use_weights: bool) -> str:
         return pwta_column if use_weights else default_column
 
@@ -257,9 +257,15 @@ def _count_jobs(data_df, geography: str, variable: Union[dict, str],
 
     # Filter the DataFrame based on geography
     geography_filtered_df = {
-        'df': _filter_by_geography(data_df, 'GORWKR', geography, area_codes),
-        'agg_column': _get_agg_column('GORWKR', use_weights)
+        'df': _filter_by_geography(data_df, 'GEOGRAPHY', geography, area_codes),
+        'agg_column': _get_agg_column('GEOGRAPHY', use_weights)
     }
+
+    if geography_filtered_df['df'].empty:
+        # Dataframe is empty where the lookup has not found any results matching the specified geography. This will
+        # occur when all geography codes are accounted for, so Rest of UK will return no data.
+
+        return None
 
     if int(year) in CONFIG['sampling_files'] and agg_func == 'sum':
         results = sampling_file_handler.get_counts_and_ci(geography_filtered_df, new_column, pwta_column, groupby_col)
@@ -314,11 +320,11 @@ def trim_columns(data_df: pd.DataFrame, pwta_column) -> pd.DataFrame:
     pwta_col_loc = data_df.columns.get_loc(pwta_column)
 
     industry_col_locs = get_col_locs(['INDC07M', 'INDC07S', 'INDG07M', 'INDG07S', 'INDD07M', 'INDD07S'])
-    region_col_locs = get_col_locs(['GORWKR', 'GORWK2R'])
+    geog_col_locs = get_col_locs(['GEOGRAPHY', 'GEOGRAPHY_2'])
     filter_col_locs = get_col_locs(CONFIG['filter_by'])
 
     data_df = data_df.iloc[:, [caseno_col_loc, pwta_col_loc]
-                              + variable_range + region_col_locs + filter_col_locs + industry_col_locs]
+                              + variable_range + geog_col_locs + filter_col_locs + industry_col_locs]
 
     return data_df
 
@@ -349,13 +355,17 @@ def clean_dataframe(data_df: pd.DataFrame, variable, year, pwta_column) -> pd.Da
     data_df = data_df.rename(
         columns={
             pwta_column: f'{year}',
-            'GORWKR': f'Raw_{year}',
+            'GEOGRAPHY': f'Raw_{year}',
             'Confidence Interval lower': f'{year} Confidence Interval lower',
             'Confidence Interval upper': f'{year} Confidence Interval upper'
         }
     )
 
     return data_df
+
+
+def remove_zero_weight_rows(df, weight_column):
+    return df[df[weight_column].notna() & (df[weight_column] > 0)]
 
 
 def return_variable_info(variable, variables_missing):
@@ -415,8 +425,8 @@ def combine_main_and_secondary_variables(data_df) -> pd.DataFrame:
     column_type_rules = [{'search_string': '_main', 'replacement_string': ''},
                          {'search_string': '_secondary', 'replacement_string': ''}]
 
-    region_type_rules = [{'search_string': 'GORWKR', 'replacement_string': 'GORWKR', 'joint_col': '_main'},
-                         {'search_string': 'GORWK2R', 'replacement_string': 'GORWKR', 'joint_col': '_secondary'}]
+    region_type_rules = [{'search_string': 'GEOGRAPHY', 'replacement_string': 'GEOGRAPHY', 'joint_col': '_main'},
+                         {'search_string': 'GEOGRAPHY_2', 'replacement_string': 'GEOGRAPHY', 'joint_col': '_secondary'}]
 
     columns_to_match = [entry['search_string'] for entry in column_type_rules + region_type_rules]
 

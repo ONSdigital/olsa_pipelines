@@ -1,8 +1,8 @@
 # General
 
 variables = ['age', 'sex', 'ethnicity', 'cob', 'disability', 'qualification', 'employment', 'skill', 'subregional_partnerships', 'occupation'] # ['age', 'sex', 'ethnicity', 'cob', 'disability', 'qualification', 'employment', 'skill', 'subregional_partnerships', 'occupation']
-geography_file = 'areas.xlsx'
-sector_file = 'industry_definitions.xlsx'
+geography_file = 'examples/example_areas.xlsx'
+sector_file = 'examples/example_industry_definitions.xlsx'
 outside_uk_code = 22
 produce_headline_totals = true
 date_range = [2024, 2025] # A single year should be written as [2025, 2025]
@@ -13,5 +13,6 @@ shade_unreliable_data = true
 replace_disclosive_data = true
 set_negative_values_to_zero = false
 delete_raw_data = true
-debug_mode = false # Should be false unless you need to change elements of the code
+debug_mode = false # false, 'speed up calibration', 'simplify partitions' or 'speed up calibration + simplify partitions'. All options other than false will produce incorrect CI estimates, but can be used to speed up analysis for debugging.
 analysis_type = 'sectors' # business_ownership or sectors
+geography_type = 'Region_work' # Region_work, Region_residence, LA, CA, LSOA or MSOA. Note: LA, CA and LSOA, MSOA geographies only support residence

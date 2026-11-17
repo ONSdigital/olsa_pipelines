@@ -41,7 +41,7 @@ def extract_numeric_codes(data: dict) -> dict:
 
         codes_dict[industry] = new_values
 
-    print("Extracted codes:")
+    print("\nExtracted codes:")
     for industry, value in codes_dict.items():
         print(f"{industry} codes: {sorted(value)}")
 
@@ -183,7 +183,7 @@ def prefer_inclusive_files(files):
 
 def return_area_codes(file_name):
     df = pd.read_excel(file_name)
-    return df.groupby('Area')['Codes'].apply(list).to_dict()
+    return df.groupby('Geography name')['Geography code'].apply(list).to_dict()
 
 
 def remap_tuple_ranges(code_dict: dict):

@@ -24,6 +24,9 @@ def load_r_packages_if_needed(datasets):
 
 
 def combine_sampling_file_and_data(data, year):
+    # Prevents circular import with data_pipeline.py
+    from .data_pipeline import remove_zero_weight_rows
+
     if year == 2024:
         sampling_file_path = CONFIG['2024_sampling_file']
     elif year == 2025:
@@ -33,17 +36,14 @@ def combine_sampling_file_and_data(data, year):
 
     sampling_file = sampling_file[['CASENO', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'dweight_adj']]
 
+    sampling_file = remove_zero_weight_rows(sampling_file, 'dweight_adj')
+
     # Merge sampling file and data file
     data_with_sampling = data.merge(sampling_file, on="CASENO", how="left")
 
     # Ensure weight variables are numeric
     data_with_sampling['PWTA22'] = pd.to_numeric(data_with_sampling['PWTA22'], errors='coerce')
     data_with_sampling['dweight_adj'] = pd.to_numeric(data_with_sampling['dweight_adj'], errors='coerce')
-
-    # Keep only rows where weights are positive
-    data_with_sampling = data_with_sampling[
-        (data_with_sampling['dweight_adj'] > 0) & (data_with_sampling['PWTA22'] > 0)
-        ]
 
     # Extract household ID from case number (remove last two characters)
     data_with_sampling['hhid'] = data_with_sampling['CASENO'].astype(str).str[:-2]
@@ -110,28 +110,6 @@ def clean_results(pwta_column, variable):
     return results
 
 
-# def run_svystat(variable=None, groupby_col=None, all_industries=False):
-#     from rpy2.robjects import r
-#
-#     if all_industries and variable == 'headline_totals':
-#         groupby_string = 'constant'
-#     elif all_industries and variable != 'headline_totals':
-#         groupby_string = variable
-#     elif variable == 'headline_totals':
-#         groupby_string = groupby_col
-#     else:
-#         groupby_string = f'{groupby_col} + {variable}'
-#
-#     # Run survey design and analysis
-#     r(f'''
-#     results <- svystatTM(
-#         design = cal_survey_subset,
-#         y = ~ones,
-#         by = ~{groupby_string},
-#         vartype = c("se"),
-#         conf.int = TRUE)
-#     ''')
-
 def run_svystat(variable=None, groupby_col=None, all_industries=False):
     from rpy2.robjects import r
 
@@ -190,13 +168,36 @@ def calibrate_survey(weight_column):
     """
     from rpy2.robjects import r
 
+    r('''
+        # Identify available p-columns
+        required <- paste0("p", 1:7)
+        present <- intersect(required, names(full_data))
+        missing <- setdiff(required, present)
+        
+        if (length(missing)) {
+        message("    Partition columns missing and will be skipped: ",
+        paste(missing, collapse = ", "))
+        }
+    ''')
+
+    if 'simplify partitions' in CONFIG['debug_mode']:
+        r('''
+            # Compute simplified partitions only if present
+            if ("p1" %in%present) full_data$p1 <- floor((full_data$p1 - 1) / 57) + 1
+            if ("p2" %in%present) full_data$p2 <- (full_data$p2 - 1) %% 431 + 1
+            if ("p3" %in%present) full_data$p3 <- floor((full_data$p3 - 1) / 12) + 1
+            if ("p4" %in%present) full_data$p4 <- floor((full_data$p4 - 1) / 13) + 1
+            if ("p6" %in%present) {
+                COB_EU <- (full_data$p6 - 1) %% 3 + 1
+                GOVTOF <- floor((full_data$p6 - 1) / 12) + 1
+                full_data$p6 <- (GOVTOF - 1) * 3 + COB_EU}
+        ''')
+
     # Speeds up running regenesees if debug mode is true
-    if not CONFIG['debug_mode']:
+    if 'speed up calibration' not in CONFIG['debug_mode']:
         # Convert calibration groups into type factor
         r('''
-        for (i in 1:7) {
-            full_data[[paste0("p", i)]] = as.factor(full_data[[paste0("p", i)]])
-        }
+            full_data[present] <- lapply(full_data[present], as.factor)
         ''')
 
     # Run calibration
